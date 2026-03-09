@@ -35,15 +35,13 @@ transcript-react/
 
 ## Запуск
 
-### 1. Запусти Python сервер (из папки transcript-app)
+### 1. Запусти Python сервер
 ```bash
-cd ../transcript-app
 python3 server.py
 ```
 
 ### 2. Установи зависимости и запусти React
 ```bash
-cd transcript-react
 npm install
 npm run dev
 ```
