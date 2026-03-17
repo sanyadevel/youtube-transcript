@@ -34,8 +34,50 @@ export function useYouTubePlayer({ containerId, videoId, onTimeUpdate }: UseYouT
   useEffect(() => {
     if (!videoId) return
 
+    const startSyncTimer = () => {
+      if (syncTimerRef.current) clearInterval(syncTimerRef.current)
+      if (onTimeUpdate) {
+        syncTimerRef.current = setInterval(() => {
+          try {
+            const t = playerRef.current?.getCurrentTime?.()
+            if (t != null) onTimeUpdate(t)
+          } catch (_) {}
+        }, 400)
+      }
+    }
+
+    // If player already exists, just load the new video — don't destroy/recreate,
+    // because YT.Player replaces the div with an iframe; destroy() removes it from
+    // the DOM so the container no longer exists for the next YT.Player() call.
+    if (playerRef.current) {
+      try {
+        playerRef.current.cueVideoById(videoId)
+        startSyncTimer()
+      } catch (_) {
+        // If the existing player is in a broken state, fall through to full reinit below
+        destroyPlayer()
+      }
+      if (playerRef.current) return
+    }
+
+    const createContainer = () => {
+      // The original div may have been replaced by an iframe and then removed.
+      // Re-insert a fresh div so YT.Player has a target element.
+      let el = document.getElementById(containerId)
+      if (!el) {
+        const parent = document.querySelector(`[data-yt-container="${containerId}"]`)
+        if (parent) {
+          el = document.createElement('div')
+          el.id = containerId
+          parent.appendChild(el)
+        }
+      }
+    }
+
     const initPlayer = () => {
-      destroyPlayer()
+      createContainer()
+      const el = document.getElementById(containerId)
+      if (!el) return
 
       playerRef.current = new window.YT.Player(containerId, {
         videoId,
@@ -45,14 +87,7 @@ export function useYouTubePlayer({ containerId, videoId, onTimeUpdate }: UseYouT
         events: {
           onReady: () => {
             setPlayerReady(true)
-            if (onTimeUpdate) {
-              syncTimerRef.current = setInterval(() => {
-                try {
-                  const t = playerRef.current?.getCurrentTime?.()
-                  if (t != null) onTimeUpdate(t)
-                } catch (_) {}
-              }, 400)
-            }
+            startSyncTimer()
           },
         },
       })
