@@ -19,10 +19,12 @@ export function VideoPlayer({ videoId }: VideoPlayerProps) {
           </div>
         )}
         <div
-          id="yt-player"
+          data-yt-container="yt-player"
           className={styles.player}
           style={{ display: videoId ? 'block' : 'none' }}
-        />
+        >
+          <div id="yt-player" style={{ width: '100%', height: '100%' }} />
+        </div>
       </div>
 
       <div className={styles.info}>
