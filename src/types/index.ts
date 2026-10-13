@@ -9,11 +9,3 @@ export interface TranscriptResponse {
 }
 
 export type LoadState = 'idle' | 'loading' | 'success' | 'error'
-
-// Extend window for YouTube IFrame API
-declare global {
-  interface Window {
-    onYouTubeIframeAPIReady: () => void
-    YT: typeof YT
-  }
-}

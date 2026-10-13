@@ -33,20 +33,36 @@ transcript-react/
         └── globals.css      # CSS переменные + reset
 ```
 
-## Запуск
+## Запуск в разработке
 
-### 1. Запусти Python сервер
+Установи зависимости один раз:
+
 ```bash
-python3 server.py
+npm install
+python -m pip install -r requirements.txt
 ```
 
-### 2. Установи зависимости и запусти React
+Для Python 3.15 pre-release используй `python -m pip install --ignore-requires-python -r requirements.txt`: библиотека пока официально ограничивает Python версией ниже 3.15.
+
+Запусти Python API и Vite в двух терминалах:
+
 ```bash
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-npm install
+& "$env:LOCALAPPDATA\Programs\Python\Python315\python.exe" server.py --port 8765
+```
+
+```bash
 npm run dev
 ```
 
-Открой: http://localhost:3000
+Открой адрес, который напечатает Vite (обычно `http://localhost:3000`). Vite проксирует `/api/*` на Python-сервер `http://localhost:8765`.
 
-Vite автоматически проксирует `/api/*` → `http://localhost:8765/api/*`
+## Запуск готового приложения
+
+Собери React-приложение и запусти Python-сервер:
+
+```bash
+npm run build
+& "$env:LOCALAPPDATA\Programs\Python\Python315\python.exe" server.py --port 8765
+```
+
+Открой `http://localhost:3000`. Python-сервер раздаёт файлы из `dist/` и обрабатывает `/api/transcript` на том же порту. Если `dist/` ещё не создан, сначала выполни `npm run build`.

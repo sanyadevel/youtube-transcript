@@ -5,7 +5,20 @@ YouTube Transcript Server
 """
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
-import json, re, urllib.parse, os
+import argparse
+import json
+import mimetypes
+import os
+import re
+import urllib.parse
+
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+DIST_DIR = os.path.join(ROOT_DIR, 'dist')
+NO_TRANSCRIPT_ERRORS = {'NoTranscriptFound', 'TranscriptsDisabled'}
+
+
+class NoTranscriptAvailable(Exception):
+    pass
 
 def get_video_id(url):
     patterns = [
@@ -19,16 +32,43 @@ def get_video_id(url):
 
 def fetch_transcript(video_id):
     from youtube_transcript_api import YouTubeTranscriptApi
+
     ytt = YouTubeTranscriptApi()
     for langs in (['ru'], ['en'], None):
         try:
-            t = ytt.fetch(video_id, languages=langs) if langs else \
-                next(iter(ytt.list(video_id))).fetch()
-            return [{"start": round(s.start, 2), "text": s.text.strip()}
-                    for s in t if s.text.strip()]
-        except Exception:
+            if hasattr(ytt, 'fetch'):
+                # youtube-transcript-api 1.x
+                if langs:
+                    transcript = ytt.fetch(video_id, languages=langs)
+                else:
+                    transcript = next(iter(ytt.list(video_id))).fetch()
+            elif langs:
+                # youtube-transcript-api 0.x
+                transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=langs)
+            else:
+                transcript = next(iter(YouTubeTranscriptApi.list_transcripts(video_id))).fetch()
+
+            segments = []
+            for snippet in transcript:
+                if isinstance(snippet, dict):
+                    start, text = snippet.get('start', 0), snippet.get('text', '')
+                else:
+                    start, text = snippet.start, snippet.text
+                text = text.strip()
+                if text:
+                    segments.append({"start": round(start, 2), "text": text})
+            return segments
+        except StopIteration:
             continue
-    raise Exception("Субтитры не найдены для этого видео")
+        except Exception as e:
+            if type(e).__name__ in NO_TRANSCRIPT_ERRORS:
+                continue
+            # Keep the upstream reason visible. Previously all exceptions were
+            # swallowed and reported as a misleading 404 "no subtitles".
+            raise RuntimeError(f"YouTube: {type(e).__name__}: {e}") from e
+    raise NoTranscriptAvailable(
+        "У видео нет доступных субтитров на русском, английском или других языках"
+    )
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -54,16 +94,17 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 segs = fetch_transcript(vid)
                 self._json(200, {"video_id": vid, "segments": segs})
+            except NoTranscriptAvailable as e:
+                self._json(404, {"error": str(e)})
             except Exception as e:
-                err = str(e)
-                code = 404 if "не найден" in err.lower() or "disabled" in err.lower() else 500
-                self._json(code, {"error": err})
+                self._json(502, {"error": str(e)})
 
-        # ── / and static ──
-        elif path in ('/', '/index.html'):
-            self._file('frontend/index.html', 'text/html; charset=utf-8')
+        elif path.startswith('/api/') or path == '/api':
+            self._json(404, {"error": "API endpoint not found"})
+
+        # ── app shell and static assets ──
         else:
-            self._json(404, {"error": "Not found"})
+            self._static_file(path)
 
     # ── helpers ──
     def _cors(self, status):
@@ -82,24 +123,49 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _file(self, filepath, ctype):
+    def _static_file(self, path):
+        # Serve the Vite build. For client-side routes, fall back to index.html.
+        if not os.path.isdir(DIST_DIR):
+            return self._json(503, {
+                "error": "Frontend build not found. Run 'npm run build' first."
+            })
+
+        relative_path = urllib.parse.unquote(path).lstrip('/')
+        filepath = os.path.realpath(os.path.join(DIST_DIR, relative_path))
+        if os.path.normcase(os.path.commonpath((DIST_DIR, filepath))) != os.path.normcase(DIST_DIR):
+            return self._json(404, {"error": "Not found"})
+
+        if path == '/' or not os.path.isfile(filepath):
+            # Missing asset requests should stay 404; extensionless paths are SPA routes.
+            if path != '/' and os.path.splitext(relative_path)[1]:
+                return self._json(404, {"error": "Not found"})
+            filepath = os.path.join(DIST_DIR, 'index.html')
+
         try:
             with open(filepath, 'rb') as f:
                 body = f.read()
             self.send_response(200)
-            self.send_header('Content-Type', ctype)
+            content_type = mimetypes.guess_type(filepath)[0] or 'application/octet-stream'
+            if content_type.startswith('text/') or content_type in ('application/javascript', 'application/json'):
+                content_type += '; charset=utf-8'
+            self.send_header('Content-Type', content_type)
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.send_header('Content-Length', len(body))
             self.end_headers()
             self.wfile.write(body)
         except FileNotFoundError:
-            self._json(404, {"error": f"{filepath} not found"})
+            self._json(503, {
+                "error": "Frontend build is incomplete. Run 'npm run build' first."
+            })
 
 
 if __name__ == '__main__':
-    port = 8765
+    parser = argparse.ArgumentParser(description='YouTube transcript app server')
+    parser.add_argument('--port', type=int, default=int(os.environ.get('PORT', '3000')))
+    port = parser.parse_args().port
     print(f"\n  ✅  Сервер: http://localhost:{port}")
-    print(f"  📺  Открой: http://localhost:{port}")
-    print(f"  🔒  API:    http://localhost:{port}/api/transcript?url=...")
+    print(f"  📺  Приложение: http://localhost:{port}")
+    print(f"  🔒  API:         http://localhost:{port}/api/transcript?url=...")
     print(f"  🛑  Стоп:   Ctrl+C\n")
     server = HTTPServer(('localhost', port), Handler)
     try:
