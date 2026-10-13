@@ -42,6 +42,7 @@ python3 server.py
 
 ### 2. Установи зависимости и запусти React
 ```bash
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 npm install
 npm run dev
 ```
