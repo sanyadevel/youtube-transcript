@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/run-app.mjs dev",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "serve": "node scripts/run-app.mjs production",
+    "start": "npm run build && node scripts/run-app.mjs production"
   },
   "dependencies": {
     "react": "^18.2.0",

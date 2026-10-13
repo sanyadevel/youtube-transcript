@@ -44,25 +44,20 @@ python -m pip install -r requirements.txt
 
 Для Python 3.15 pre-release используй `python -m pip install --ignore-requires-python -r requirements.txt`: библиотека пока официально ограничивает Python версией ниже 3.15.
 
-Запусти Python API и Vite в двух терминалах:
-
-```bash
-& "$env:LOCALAPPDATA\Programs\Python\Python315\python.exe" server.py --port 8765
-```
+Запусти API и React вместе одной командой:
 
 ```bash
 npm run dev
 ```
 
-Открой адрес, который напечатает Vite (обычно `http://localhost:3000`). Vite проксирует `/api/*` на Python-сервер `http://localhost:8765`.
+Открой `http://localhost:3000`. `npm run dev` запускает Python API на `8765` и Vite на `3000`; останови оба сочетанием Ctrl+C.
 
 ## Запуск готового приложения
 
-Собери React-приложение и запусти Python-сервер:
+Собери React-приложение и запусти Python-сервер одной командой:
 
 ```bash
-npm run build
-& "$env:LOCALAPPDATA\Programs\Python\Python315\python.exe" server.py --port 8765
+npm start
 ```
 
-Открой `http://localhost:3000`. Python-сервер раздаёт файлы из `dist/` и обрабатывает `/api/transcript` на том же порту. Если `dist/` ещё не создан, сначала выполни `npm run build`.
+Открой `http://localhost:3000`. `npm start` сначала собирает React в `dist/`, затем запускает Python-сервер, который раздаёт приложение и API. Чтобы запустить уже собранную версию без повторной сборки, используй `npm run serve`.
